@@ -54,7 +54,7 @@ class game:
 
 	def parse(self):
 		"""Requests the latest copy of the game, parsing all necessary info"""
-		r = _requests_session().get(self.db_url)
+		r = session.get(self.db_url)
 		r.raise_for_status()
 		# LXML must be used over html.parser
 		# as there are a few instances of invalid HTML tags which appear to pollute the tree
@@ -119,7 +119,6 @@ class AgDB:
 		self.games = []
 		self.games_json = []
 		self._html = None
-		self.session = _requests_session()
 		self.url = None
 		if json_file and os.path.isfile(json_file):
 			self.load_game_json(json_file)
@@ -138,7 +137,8 @@ class AgDB:
 		"""Retrieves a list of all games in the database from a URL."""
 		url = url or self.base_url
 		self.url = url
-		r = self.session.get(url)
+		r = session.get(url)
+		print(r.text)
 		r.raise_for_status()
 		self._html = r.text
 		self.parse()
@@ -190,11 +190,26 @@ class AgDB:
 		return [i for i in self.games if self.info]
 
 
+def is_behind_cloudflare(url):
+	"""Makes an educated guess to see if a site is sitting behind cloudflare."""
+	r = requests.head(url)
+	return r.status_code == 403 and "cloudflare.com" in r.headers.get("Report-To", "")
+
 def _requests_session():
+	if is_behind_cloudflare(AgDB.base_url):
+		try:
+			import cloudscraper
+		except (ModuleNotFoundError, ImportError):
+			print("The site appears to be sitting behind Cloudflare. Install the cloudscraper module and ensure that it is working before continuing")
+			sys.exit()
+		print("The site appears to be sitting behind Cloudflare. Setting up anti-bot bypass.")
+		return cloudscraper.create_scraper()  # Cloudscraper spoofs UA for us
 	session = requests.Session()
-	session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0"
+	#session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0"
 	return session
 
+
+session = _requests_session()
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2 or "-h" in sys.argv or "--help" in sys.argv:
