@@ -138,7 +138,6 @@ class AgDB:
 		url = url or self.base_url
 		self.url = url
 		r = session.get(url)
-		print(r.text)
 		r.raise_for_status()
 		self._html = r.text
 		self.parse()
@@ -196,6 +195,7 @@ def is_behind_cloudflare(url):
 	return r.status_code == 403 and "cloudflare.com" in r.headers.get("Report-To", "")
 
 def _requests_session():
+	global session
 	if is_behind_cloudflare(AgDB.base_url):
 		try:
 			import cloudscraper
@@ -203,13 +203,18 @@ def _requests_session():
 			print("The site appears to be sitting behind Cloudflare. Install the cloudscraper module and ensure that it is working before continuing")
 			sys.exit()
 		print("The site appears to be sitting behind Cloudflare. Setting up anti-bot bypass.")
-		return cloudscraper.create_scraper()  # Cloudscraper spoofs UA for us
+		session = cloudscraper.create_scraper()
+		# Cloudscraper spoofs UA for us
+		# but it is not always up-to-date, which is now inforced by CF
+		# todo: ensure this stays current
+		session.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:67.0) Gecko/20100101 Firefox/67.0"
+		return session
 	session = requests.Session()
-	#session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0"
+	session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0"
 	return session
 
 
-session = _requests_session()
+session = None
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2 or "-h" in sys.argv or "--help" in sys.argv:
@@ -217,6 +222,8 @@ if __name__ == "__main__":
 		sys.exit()
 	fn = sys.argv[-1]
 	errors = 0
+	# create the global session
+	_requests_session()
 	ag = AgDB(fn)
 	#ag.get_games_from_file("ag.html")
 	ag.get_games_from_url()
